@@ -488,58 +488,270 @@ class InMemoryAppStateRepository {
 // ============================================
 // UI渲染器
 // ============================================
-class DOMRenderer {
-    constructor() {
-        this.elements = new Map();
+// ... [前面的代码保持不变，直到 ApplicationController 类]
+
+// ============================================
+// 分布UI控制器（修复版）
+// ============================================
+class DistributionUIController {
+    constructor(manager, renderer, repository) {
+        this.manager = manager;
+        this.renderer = renderer;
+        this.repository = repository; // 添加 repository 引用
     }
 
-    _getElement(selector) {
-        if (!this.elements.has(selector)) {
-            const element = document.querySelector(selector);
-            if (!element) return null;
-            this.elements.set(selector, element);
+    initialize() {
+        // 初始化时从 repository 读取当前分布
+        const savedDist = this.repository.getCurrentDistribution();
+        if (savedDist && this.manager.select(savedDist)) {
+            // 如果 repository 中有保存的分布，使用它
         }
-        return this.elements.get(selector);
+        this._renderMenu();
+        this._bindEvents();
+        this._updateFormulaDisplay();
     }
 
-    showElement(selector) {
-        const el = this._getElement(selector);
-        if (el) el.style.display = 'block';
+    _renderMenu() {
+        const menuContainer = this.renderer._getElement(CONFIG.SELECTORS.DIST_MENU);
+        if (!menuContainer) return;
+
+        const distributions = this.manager.getAll();
+        menuContainer.innerHTML = distributions.map(({ key, name, icon }) => `
+            <div class="dist-menu-item ${key === this.manager.getCurrentKey() ? 'active' : ''}" 
+                 data-key="${key}">
+                <span class="dist-icon">${icon}</span>
+                <span class="dist-name">${name}</span>
+            </div>
+        `).join('');
     }
 
-    hideElement(selector) {
-        const el = this._getElement(selector);
-        if (el) el.style.display = 'none';
-    }
+    _bindEvents() {
+        const menuContainer = this.renderer._getElement(CONFIG.SELECTORS.DIST_MENU);
+        if (!menuContainer) return;
 
-    setValue(selector, value) {
-        const el = this._getElement(selector);
-        if (el) el.value = value;
-    }
-
-    getValue(selector) {
-        const el = this._getElement(selector);
-        return el ? el.value : '';
-    }
-
-    setHTML(selector, html) {
-        const el = this._getElement(selector);
-        if (el) el.innerHTML = html;
-    }
-
-    setText(selector, text) {
-        const el = this._getElement(selector);
-        if (el) el.textContent = text;
-    }
-
-    showInterface(interfaceId) {
-        document.querySelectorAll(CONFIG.SELECTORS.INTERFACES).forEach(el => {
-            el.style.display = 'none';
+        menuContainer.addEventListener('click', (e) => {
+            const item = e.target.closest('.dist-menu-item');
+            if (!item) return;
+            this.selectDistribution(item.dataset.key);
         });
-        const target = document.getElementById(interfaceId);
-        if (target) target.style.display = 'block';
+    }
+
+    selectDistribution(key) {
+        if (!this.manager.select(key)) return;
+
+        // 关键修复：同步更新 repository 中的分布设置
+        this.repository.setDistribution(key);
+
+        document.querySelectorAll('.dist-menu-item').forEach(item => {
+            item.classList.toggle('active', item.dataset.key === key);
+        });
+
+        this._updateFormulaDisplay();
+    }
+
+    _updateFormulaDisplay() {
+        const current = this.manager.getCurrent();
+        this.renderer.setText(CONFIG.SELECTORS.CURRENT_DIST_NAME, current.name);
+        this.renderer.setHTML(CONFIG.SELECTORS.FORMULA_BOX, current.latex);
+        
+        // 重新渲染MathJax
+        if (window.MathJax) {
+            MathJax.typesetPromise([document.getElementById('formulaBox')]).catch(err => {
+                console.error('MathJax渲染失败:', err);
+            });
+        }
+    }
+
+    openDetailModal() {
+        const current = this.manager.getCurrent();
+        const detail = current.detail;
+        
+        this.renderer.setText(CONFIG.SELECTORS.DETAIL_TITLE, `📐 ${detail.title}`);
+        
+        const paramsHtml = detail.parameters.map(p => `
+            <li><strong>${p.name}</strong>：${p.desc}<br>
+            <small style="color:#667eea">${p.constraint}</small></li>
+        `).join('');
+        
+        const propertiesHtml = detail.properties.map(p => `<li>${p}</li>`).join('');
+        const applicationsHtml = detail.applications.map(a => `<li>${a}</li>`).join('');
+        
+        this.renderer.setHTML(CONFIG.SELECTORS.DETAIL_BODY, `
+            <div class="detail-section">
+                <h4>📖 定义</h4>
+                <p>${detail.description}</p>
+            </div>
+            
+            <div class="detail-section">
+                <h4>📊 数学表达</h4>
+                <div class="detail-formula">${current.latex}</div>
+            </div>
+            
+            <div class="detail-section">
+                <h4>⚙️ 参数说明</h4>
+                <ul>${paramsHtml}</ul>
+            </div>
+            
+            <div class="detail-section">
+                <h4>📈 统计特性</h4>
+                <ul>${propertiesHtml}</ul>
+            </div>
+            
+            <div class="detail-section">
+                <h4>💡 应用场景</h4>
+                <ul>${applicationsHtml}</ul>
+            </div>
+            
+            <div class="detail-section">
+                <h4>🔍 关键特性</h4>
+                <p>${detail.characteristics}</p>
+            </div>
+        `);
+        
+        // 渲染MathJax
+        setTimeout(() => {
+            if (window.MathJax) {
+                MathJax.typesetPromise([document.getElementById('detailBody')]).catch(err => {
+                    console.error('MathJax渲染失败:', err);
+                });
+            }
+        }, 10);
+        
+        this.renderer.showElement(CONFIG.SELECTORS.DIST_DETAIL_MASK);
+        this.renderer.showElement(CONFIG.SELECTORS.DIST_DETAIL_MODAL);
+    }
+
+    closeDetailModal() {
+        this.renderer.hideElement(CONFIG.SELECTORS.DIST_DETAIL_MASK);
+        this.renderer.hideElement(CONFIG.SELECTORS.DIST_DETAIL_MODAL);
     }
 }
+
+// ============================================
+// 应用控制器（修复初始化）
+// ============================================
+class ApplicationController {
+    constructor() {
+        this._initDependencies();
+        this._bindEvents();
+    }
+
+    _initDependencies() {
+        this.renderer = new DOMRenderer();
+        this.repository = new InMemoryAppStateRepository();
+        this.randomGen = new JitteredRandomGenerator();
+        this.randomGen.setJitterRange(this.repository.getJitterRange());
+        this.distManager = new DistributionManager();
+        
+        // 修复：传递 repository 给 DistributionUIController
+        this.distUI = new DistributionUIController(this.distManager, this.renderer, this.repository);
+        
+        this.flickerService = new FlickerService(this.repository, this.renderer, this.randomGen);
+        this.downloadService = new FileDownloadService(CONFIG.URLS.SOURCE_CODE);
+        
+        this.openSettingsUC = new OpenSettingsUseCase(this.repository, this.renderer);
+        this.saveSettingsUC = new SaveSettingsUseCase(
+            this.repository,
+            this.renderer,
+            this.flickerService,
+            this.randomGen
+        );
+    }
+
+    _bindEvents() {
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', () => this._init());
+        } else {
+            this._init();
+        }
+    }
+
+    _init() {
+        // 初始化分布UI（会从repository读取当前分布）
+        this.distUI.initialize();
+        
+        // 显示默认界面
+        this.renderer.showInterface('default');
+        
+        // 更新人数显示
+        const text = `${this.repository.getMinStudent()} - ${this.repository.getMaxStudent()}`;
+        document.querySelectorAll('#currentTotal, #flickerTotal').forEach(el => {
+            el.textContent = text;
+        });
+
+        this._setupModeSwitching();
+    }
+
+    _setupModeSwitching() {
+        const dropdown = this.renderer._getElement(CONFIG.SELECTORS.MODE_DROPDOWN);
+        if (!dropdown) return;
+
+        dropdown.addEventListener('change', (e) => {
+            const mode = e.target.value;
+            if (mode === 'settings') {
+                this.openSettings();
+                e.target.value = 'default';
+                return;
+            }
+            this.renderer.showInterface(mode);
+        });
+    }
+
+    openSettings() { this.openSettingsUC.execute(); }
+    
+    closeSettings() {
+        this.renderer.hideElement(CONFIG.SELECTORS.MASK_LAYER);
+        this.renderer.hideElement(CONFIG.SELECTORS.SETTINGS_MODAL);
+    }
+    
+    saveSettings() {
+        const result = this.saveSettingsUC.execute();
+        result.success ? this.closeSettings() : alert(result.error);
+    }
+    
+    async downloadSourceCode() {
+        try {
+            await this.downloadService.download('DrawingStudentsID-source.zip');
+        } catch (error) {
+            alert('下载失败: ' + error.message);
+        }
+    }
+    
+    handleDefaultDraw() {
+        const result = this.randomGen.generate(
+            this.repository.getMinStudent(),
+            this.repository.getMaxStudent()
+        );
+        this.renderer.setHTML(CONFIG.SELECTORS.DEFAULT_RESULT,
+            `🎉 抽中学号：<span class="highlight">${result}</span>`
+        );
+    }
+    
+    handleFlickerDraw() {
+        this.flickerService.toggle();
+    }
+    
+    handleDistributionDraw() {
+        // 确保使用当前选中的分布
+        const result = this.distManager.sample(
+            this.repository.getMinStudent(),
+            this.repository.getMaxStudent()
+        );
+        this.renderer.setHTML(CONFIG.SELECTORS.DISTRIBUTION_RESULT,
+            `🎯 ${this.distManager.getCurrent().name}结果：<span class="highlight">${result}</span>`
+        );
+    }
+
+    openDistDetail() {
+        this.distUI.openDetailModal();
+    }
+
+    closeDistDetail() {
+        this.distUI.closeDetailModal();
+    }
+}
+
+// ... [后面的代码保持不变]
 
 // ============================================
 // 分布管理器
