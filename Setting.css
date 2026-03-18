@@ -1,4 +1,4 @@
-/* ==================== Setting.css ==================== */
+/* ==================== Setting.css (修复高度版本) ==================== */
 
 /* 遮罩层 */
 .modal-mask {
@@ -13,26 +13,39 @@
     z-index: 999;
 }
 
-/* 设置弹窗 */
+/* 设置弹窗 - 修复：减小宽度和padding，更紧凑 */
 .settings-modal {
     display: none;
     position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: 450px;
+    width: 380px;                    /* 从450px减小 */
     max-width: 90vw;
+    max-height: 85vh;              /* 新增：限制最大高度 */
     background: white;
-    border-radius: 20px;
-    box-shadow: 0 25px 50px rgba(0,0,0,0.3);
-    animation: modalSlide 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border-radius: 16px;             /* 从20px减小 */
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    animation: modalSlide 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     z-index: 1000;
+    overflow: hidden;                /* 新增：防止内容溢出 */
+}
+
+/* 分布详情弹窗可以更高一些 */
+.settings-modal.dist-detail-modal {
+    width: 600px;
+    max-height: 80vh;
+}
+
+.settings-modal.dist-detail-modal .modal-body {
+    max-height: calc(80vh - 70px);
+    overflow-y: auto;
 }
 
 @keyframes modalSlide {
     from { 
         opacity: 0;
-        transform: translate(-50%, -60%) scale(0.9);
+        transform: translate(-50%, -55%) scale(0.95);
     }
     to { 
         opacity: 1;
@@ -40,30 +53,30 @@
     }
 }
 
-/* 弹窗头部 */
+/* 弹窗头部 - 修复：减小padding */
 .modal-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 25px;
+    padding: 18px 20px;            /* 从25px减小 */
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
-    border-radius: 20px 20px 0 0;
+    border-radius: 16px 16px 0 0;  /* 匹配新的圆角 */
 }
 
 .modal-header h2 {
     margin: 0;
-    font-size: 20px;
+    font-size: 18px;               /* 从20px减小 */
 }
 
 .close-btn {
-    font-size: 28px;
+    font-size: 24px;               /* 从28px减小 */
     cursor: pointer;
     color: white;
     opacity: 0.8;
     transition: all 0.3s;
-    width: 36px;
-    height: 36px;
+    width: 32px;                   /* 从36px减小 */
+    height: 32px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -75,33 +88,44 @@
     background: rgba(255,255,255,0.2);
 }
 
-/* 弹窗主体 */
+/* 弹窗主体 - 修复：减小padding，添加滚动 */
 .modal-body {
-    padding: 25px;
+    padding: 20px;                 /* 从25px减小 */
+    overflow-y: auto;              /* 新增：内容过多时滚动 */
+    max-height: calc(85vh - 60px); /* 新增：减去头部高度 */
 }
 
-.modal-body label {
+/* 设置项标签 - 修复：减小间距 */
+.modal-body > label {
     display: block;
-    margin-bottom: 15px;
+    margin-bottom: 12px;           /* 从15px减小 */
     color: #333;
     font-weight: 500;
+    font-size: 14px;               /* 新增：统一字体大小 */
+}
+
+.modal-body > label > label {
+    display: inline;
+    font-weight: normal;
+    color: #666;
 }
 
 .modal-body label small {
     display: block;
     color: #999;
     font-weight: normal;
-    margin-top: 5px;
-    font-size: 12px;
+    margin-top: 4px;               /* 从5px减小 */
+    font-size: 11px;               /* 从12px减小 */
 }
 
+/* 输入框 - 修复：减小尺寸 */
 .num-input {
-    padding: 12px 15px;
+    padding: 10px 12px;            /* 从12px 15px减小 */
     border: 2px solid #e0e0e0;
-    border-radius: 10px;
-    width: 120px;
-    margin: 8px 0;
-    font-size: 16px;
+    border-radius: 8px;            /* 从10px减小 */
+    width: 100px;                  /* 从120px减小 */
+    margin: 6px 0;                 /* 从8px减小 */
+    font-size: 14px;               /* 从16px减小 */
     transition: all 0.3s;
 }
 
@@ -111,22 +135,22 @@
     box-shadow: 0 0 0 3px rgba(102,126,234,0.1);
 }
 
-/* 下载区块 */
+/* 下载区块 - 修复：减小margin和padding */
 .download-section {
-    margin: 25px 0;
-    padding: 20px;
+    margin: 15px 0;                /* 从25px减小 */
+    padding: 15px;                 /* 从20px减小 */
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
-    border-radius: 12px;
+    border-radius: 10px;           /* 从12px减小 */
     border: 2px dashed #667eea;
 }
 
 .download-btn {
     width: 100%;
-    padding: 15px;
+    padding: 12px;                 /* 从15px减小 */
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;            /* 从10px减小 */
     cursor: pointer;
     transition: all 0.3s;
     display: flex;
@@ -136,35 +160,35 @@
 
 .download-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 20px rgba(102,126,234,0.4);
+    box-shadow: 0 6px 15px rgba(102,126,234,0.4);
 }
 
 .download-btn span {
-    font-size: 16px;
+    font-size: 14px;               /* 从16px减小 */
     font-weight: bold;
 }
 
 .hint {
-    font-size: 12px;
+    font-size: 11px;               /* 从12px减小 */
     opacity: 0.9;
-    margin-top: 6px;
+    margin-top: 4px;               /* 从6px减小 */
 }
 
-/* 按钮组 */
+/* 按钮组 - 修复：减小margin */
 .btn-group {
-    margin-top: 25px;
+    margin-top: 20px;              /* 从25px减小 */
     display: flex;
-    gap: 15px;
+    gap: 12px;                     /* 从15px减小 */
     justify-content: flex-end;
 }
 
 .confirm-btn, .cancel-btn {
-    padding: 12px 30px;
+    padding: 10px 24px;            /* 从12px 30px减小 */
     border: none;
-    border-radius: 10px;
+    border-radius: 8px;            /* 从10px减小 */
     cursor: pointer;
     transition: all 0.3s;
-    font-size: 14px;
+    font-size: 13px;               /* 从14px减小 */
     font-weight: 500;
 }
 
@@ -180,5 +204,29 @@
 
 .confirm-btn:hover, .cancel-btn:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+}
+
+/* 新增：输入行内显示，节省空间 */
+.input-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0;
+}
+
+.input-row label {
+    min-width: 60px;
+    font-size: 13px;
+    color: #666;
+}
+
+/* 响应式调整 */
+@media (max-height: 700px) {
+    .settings-modal {
+        max-height: 90vh;
+    }
+    .modal-body {
+        max-height: calc(90vh - 60px);
+    }
 }
