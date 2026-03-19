@@ -17,7 +17,7 @@ const CONFIG = Object.freeze({
         MAX_JITTER: 20
     },
     URLS: {
-        SOURCE_CODE: 'https://github.com/WuiQeFan/DrawingStudentsID/archive/refs/heads/master.zip'
+        SOURCE_CODE: 'https://github.com/with-the-flow/DrawingStudentsID/archive/refs/heads/master.zip'
     },
     SELECTORS: {
         MODE_DROPDOWN: '#mode',
