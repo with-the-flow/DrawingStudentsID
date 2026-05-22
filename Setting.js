@@ -819,21 +819,23 @@ class DistributionUIController {
         if (!menuContainer) return;
 
         const distributions = this.manager.getAll();
-        menuContainer.innerHTML = distributions.map(({ key, name, icon }) => `
-            <div class="dist-menu-item ${key === this.manager.getCurrentKey() ? 'active' : ''}" 
-                 data-key="${key}">
-                <span class="dist-icon">${icon}</span>
-                <span class="dist-name">${name}</span>
-            </div>
-        `).join('');
+        menuContainer.innerHTML = distributions
+            .map(({ key, name, icon }) => `
+                <div class="dist-menu-item ${key === this.manager.getCurrentKey() ? 'active' : ''}"
+                     data-key="${key}">
+                    <span class="dist-icon">${icon}</span>
+                    <span class="dist-name">${name}</span>
+                </div>
+            `)
+            .join('');
     }
 
     _bindEvents() {
         const menuContainer = this.renderer._getElement(CONFIG.SELECTORS.DIST_MENU);
         if (!menuContainer) return;
 
-        menuContainer.addEventListener('click', (e) => {
-            const item = e.target.closest('.dist-menu-item');
+        menuContainer.addEventListener('click', (event) => {
+            const item = event.target.closest('.dist-menu-item');
             if (!item) return;
             this.selectDistribution(item.dataset.key);
         });
@@ -842,10 +844,9 @@ class DistributionUIController {
     selectDistribution(key) {
         if (!this.manager.select(key)) return;
 
-        // 关键修复：同步更新 repository 中的分布设置
         this.repository.setDistribution(key);
 
-        document.querySelectorAll('.dist-menu-item').forEach(item => {
+        document.querySelectorAll('.dist-menu-item').forEach((item) => {
             item.classList.toggle('active', item.dataset.key === key);
         });
 
