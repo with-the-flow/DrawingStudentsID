@@ -959,6 +959,7 @@ class ApplicationController {
 
         let acc = 0;
         let lastTime = startTime;
+        let lastValue = null;
 
         const frame = (now) => {
             const elapsed = now - startTime;
@@ -970,18 +971,24 @@ class ApplicationController {
 
             if (acc >= targetDelay || t >= 1) {
                 const value = this.randomGen.generate(min, max);
+                lastValue = value;
 
                 if (t >= 1) {
                     this.renderer.setHTML(CONFIG.SELECTORS.DEFAULT_RESULT, 
-                        `🎉 抽中学号：<span class="highlight">${value}</span>`);
+                        `🎉 抽中学号：<span class="result-static">${value}</span>`);
                     this._autoRolling = false;
                     if (defaultBtn) defaultBtn.disabled = false;
+                    this._autoRollFrameId = null;
                     return;
                 }
 
                 this.renderer.setHTML(CONFIG.SELECTORS.DEFAULT_RESULT, 
                     `✨ 抽取中：<span class="blink">${value}</span>`);
                 acc = 0;
+            } else if (lastValue !== null) {
+                // 不更新数字时移除 blink，防止卡着闪烁
+                this.renderer.setHTML(CONFIG.SELECTORS.DEFAULT_RESULT, 
+                    `✨ 抽取中：<span class="result-static">${lastValue}</span>`);
             }
 
             this._autoRollFrameId = requestAnimationFrame(frame);
@@ -998,6 +1005,16 @@ class ApplicationController {
         this._autoRolling = false;
         const defaultBtn = this.renderer._getElement(CONFIG.SELECTORS.DEFAULT_DRAW_BUTTON);
         if (defaultBtn) defaultBtn.disabled = false;
+
+        // 取消时清除结果框中的 blink 类，防止残留闪烁
+        const resultEl = document.querySelector(CONFIG.SELECTORS.DEFAULT_RESULT);
+        if (resultEl) {
+            const blinkSpan = resultEl.querySelector('.blink');
+            if (blinkSpan) {
+                blinkSpan.classList.remove('blink');
+                blinkSpan.classList.add('result-static');
+            }
+        }
     }
 
     handleDistributionDraw() {
