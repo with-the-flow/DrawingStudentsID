@@ -1,4 +1,4 @@
-// ==================== Setting.js (完整修复版) ====================
+// ==================== Setting.js (密码学安全 + 平滑减速版) ====================
 
 // ============================================
 // 配置常量
@@ -26,6 +26,8 @@ const CONFIG = Object.freeze({
         MASK_LAYER: '#mask',
         FLICKER_RESULT: '#FlickerResult',
         DEFAULT_RESULT: '#DefaultResult',
+        DEFAULT_DRAW_BUTTON: '#defaultDrawBtn',
+        AUTO_CHECKBOX: '#autoMode',
         DISTRIBUTION_RESULT: '#DistributionResult',
         MIN_INPUT: '#MinTotalStudents',
         MAX_INPUT: '#MaxTotalStudents',
@@ -77,7 +79,9 @@ class StudentIdRange {
     }
 
     generateRandom() {
-        return Math.floor(Math.random() * (this.max - this.min + 1)) + this.min;
+        const buf = new Uint32Array(1);
+        crypto.getRandomValues(buf);
+        return this.min + (buf[0] % (this.max - this.min + 1));
     }
 }
 
@@ -95,60 +99,29 @@ class FlickerSpeed {
 }
 
 // ============================================
-// 随机数生成器
+// 密码学安全随机数生成器
 // ============================================
-class SeededRandomGenerator {
-    constructor() {
-        this.entropyPool = new Uint32Array(16);
-        this.poolIndex = 0;
-        this._replenishEntropy();
-    }
-
-    _replenishEntropy() {
-        const perfTime = performance.now();
-        const memory = performance.memory?.usedJSHeapSize || Date.now();
-        const screenEntropy = screen.width * screen.height + screen.colorDepth;
-        const timezone = new Date().getTimezoneOffset();
-
-        for (let i = 0; i < this.entropyPool.length; i++) {
-            this.entropyPool[i] = this._mixEntropy(
-                perfTime * (i + 1),
-                memory >> (i % 32),
-                screenEntropy * (i * 997),
-                timezone ^ (Date.now() >> i)
-            );
-        }
-    }
-
-    _mixEntropy(a, b, c, d) {
-        a = (a ^ (a << 13)) & 0xFFFFFFFF;
-        a = (a ^ (a >>> 17)) & 0xFFFFFFFF;
-        a = (a ^ (a << 5)) & 0xFFFFFFFF;
-        b = (b + a) & 0xFFFFFFFF;
-        c = (c ^ b) & 0xFFFFFFFF;
-        d = (d + (c << 7)) & 0xFFFFFFFF;
-        return ((a + b + c + d) >>> 0);
-    }
-
+class CryptoRandomGenerator {
     next() {
-        this.poolIndex = (this.poolIndex + 1) % this.entropyPool.length;
-        this.entropyPool[this.poolIndex] = this._mixEntropy(
-            this.entropyPool[this.poolIndex],
-            Date.now(),
-            Math.random() * 0xFFFFFFFF,
-            this.poolIndex
-        );
-        return (this.entropyPool[this.poolIndex] % 0x7FFFFFFF) / 0x7FFFFFFF;
+        const buf = new Uint32Array(1);
+        crypto.getRandomValues(buf);
+        return buf[0] / 0xFFFFFFFF;
     }
 
     nextInt(min, max) {
-        return Math.floor(this.next() * (max - min + 1)) + min;
+        const range = max - min + 1;
+        const buf = new Uint32Array(1);
+        crypto.getRandomValues(buf);
+        return min + (buf[0] % range);
     }
 }
 
+// ============================================
+// 带抖动和去重的随机数生成器
+// ============================================
 class JitteredRandomGenerator {
-    constructor(seedGenerator) {
-        this.seedGen = seedGenerator || new SeededRandomGenerator();
+    constructor(randomGenerator) {
+        this.rng = randomGenerator || new CryptoRandomGenerator();
         this.jitterRange = CONFIG.DEFAULTS.JITTER_RANGE;
         this.history = new Set();
         this.maxHistory = 50;
@@ -167,28 +140,14 @@ class JitteredRandomGenerator {
     }
 
     _generateBaseValue(min, max) {
-        const r1 = this.seedGen.next();
-        const r2 = this.seedGen.next();
-        const r3 = this.seedGen.next();
-        const combined = (r1 + r2 + r3) / 3;
-        const noise = (r1 - 0.5) * 0.1;
-        return Math.floor((combined + noise) * (max - min + 1)) + min;
+        return this.rng.nextInt(min, max);
     }
 
     _applyJitter(baseValue, globalMin, globalMax) {
         if (this.jitterRange <= 0) return baseValue;
         const jitterMin = Math.max(globalMin, baseValue - this.jitterRange);
         const jitterMax = Math.min(globalMax, baseValue + this.jitterRange);
-        return this._xorShiftRandom(Date.now() ^ baseValue, jitterMin, jitterMax);
-    }
-
-    _xorShiftRandom(seed, min, max) {
-        let x = seed >>> 0;
-        x ^= x << 13;
-        x ^= x >>> 17;
-        x ^= x << 5;
-        const range = max - min + 1;
-        return (Math.abs(x) % range) + min;
+        return this.rng.nextInt(jitterMin, jitterMax);
     }
 
     _ensureNoRepeat(value, min, max) {
@@ -197,7 +156,7 @@ class JitteredRandomGenerator {
         let attempts = 0;
         let result = value;
         while (this.history.has(result) && attempts < 3) {
-            result = this._xorShiftRandom(Date.now() + attempts, min, max);
+            result = this.rng.nextInt(min, max);
             attempts++;
         }
         return result;
@@ -213,7 +172,7 @@ class JitteredRandomGenerator {
 }
 
 // ============================================
-// 概率分布数据（包含LaTeX公式和详细解释）
+// 概率分布数据
 // ============================================
 const DISTRIBUTION_DATA = {
     uniform: {
@@ -241,7 +200,7 @@ const DISTRIBUTION_DATA = {
             characteristics: '该分布具有最大熵特性，即在所有定义在[a,b]上的离散分布中，均匀分布的不确定性最大。'
         }
     },
-    
+
     normal: {
         name: '正态分布',
         icon: '📊',
@@ -270,7 +229,7 @@ const DISTRIBUTION_DATA = {
             characteristics: '正态分布是自然界最常见的分布，具有优良的数学性质，许多统计方法都基于正态假设。'
         }
     },
-    
+
     poisson: {
         name: '泊松分布',
         icon: '☎️',
@@ -298,7 +257,7 @@ const DISTRIBUTION_DATA = {
             characteristics: '当n很大且p很小时，二项分布B(n,p)可近似为泊松分布P(λ=np)。该分布具有可加性：独立泊松变量之和仍为泊松分布。'
         }
     },
-    
+
     exponential: {
         name: '指数分布',
         icon: '⏱️',
@@ -326,7 +285,7 @@ const DISTRIBUTION_DATA = {
             characteristics: '无记忆性意味着"未来不依赖过去"，即已经等待的时间不影响剩余等待时间的分布。这使得指数分布在可靠性工程和排队论中非常重要。'
         }
     },
-    
+
     binomial: {
         name: '二项分布',
         icon: '🪙',
@@ -355,7 +314,7 @@ const DISTRIBUTION_DATA = {
             characteristics: '当n→∞且p→0使得np=λ保持常数时，二项分布收敛于泊松分布。当n很大时，根据中心极限定理，可用正态分布近似。'
         }
     },
-    
+
     geometric: {
         name: '几何分布',
         icon: '🎯',
@@ -383,7 +342,7 @@ const DISTRIBUTION_DATA = {
             characteristics: '几何分布是负二项分布的特例（r=1）。其无记忆性使其成为离散时间马尔可夫链建模的重要工具。'
         }
     },
-    
+
     powerlaw: {
         name: '幂律分布',
         icon: '📈',
@@ -412,7 +371,7 @@ const DISTRIBUTION_DATA = {
             characteristics: '幂律分布没有特征尺度，呈现"无标度"（Scale-Free）特性。与正态分布相比，极端事件发生的概率更高，这在风险管理和网络科学中尤为重要。'
         }
     },
-    
+
     bimodal: {
         name: '双峰分布',
         icon: '👥',
@@ -456,6 +415,7 @@ class InMemoryAppStateRepository {
             ),
             speed: new FlickerSpeed(initialState.fast ?? CONFIG.DEFAULTS.FLICKER_SPEED),
             jitterRange: initialState.jitter ?? CONFIG.DEFAULTS.JITTER_RANGE,
+            autoMode: initialState.autoMode ?? true,
             isFlickering: false,
             intervalId: null,
             currentDistribution: 'uniform'
@@ -466,6 +426,7 @@ class InMemoryAppStateRepository {
     getMaxStudent() { return this._state.range.max; }
     getFlickerSpeed() { return this._state.speed.value; }
     getJitterRange() { return this._state.jitterRange; }
+    getAutoMode() { return this._state.autoMode; }
     isFlickering() { return this._state.isFlickering; }
     getIntervalId() { return this._state.intervalId; }
     getCurrentDistribution() { return this._state.currentDistribution; }
@@ -473,6 +434,7 @@ class InMemoryAppStateRepository {
     updateRange(range) { this._state.range = range; }
     updateSpeed(speed) { this._state.speed = speed; }
     updateJitter(range) { this._state.jitterRange = range; }
+    updateAutoMode(flag) { this._state.autoMode = !!flag; }
     setFlickering(flag) { this._state.isFlickering = flag; }
     setIntervalId(id) { this._state.intervalId = id; }
     setDistribution(key) { this._state.currentDistribution = key; }
@@ -522,6 +484,16 @@ class DOMRenderer {
         return el ? el.value : '';
     }
 
+    setChecked(selector, checked) {
+        const el = this._getElement(selector);
+        if (el) el.checked = !!checked;
+    }
+
+    getChecked(selector) {
+        const el = this._getElement(selector);
+        return el ? !!el.checked : false;
+    }
+
     setHTML(selector, html) {
         const el = this._getElement(selector);
         if (el) el.innerHTML = html;
@@ -542,12 +514,13 @@ class DOMRenderer {
 }
 
 // ============================================
-// 分布管理器
+// 分布管理器（全部使用密码学安全随机数）
 // ============================================
 class DistributionManager {
     constructor() {
         this.currentKey = 'uniform';
         this.data = DISTRIBUTION_DATA;
+        this.rng = new CryptoRandomGenerator();
     }
 
     select(key) {
@@ -592,14 +565,14 @@ class DistributionManager {
             case 'bimodal':
                 return this._sampleBimodal(min, max);
             default:
-                return Math.floor(Math.random() * (max - min + 1)) + min;
+                return this.rng.nextInt(min, max);
         }
     }
 
     _sampleNormal(min, max) {
         let u = 0, v = 0;
-        while (u === 0) u = Math.random();
-        while (v === 0) v = Math.random();
+        while (u === 0) u = this.rng.next();
+        while (v === 0) v = this.rng.next();
         const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
         const mean = (min + max) / 2;
         const stdDev = (max - min) / 5;
@@ -613,14 +586,14 @@ class DistributionManager {
         let k = 0, p = 1;
         do {
             k++;
-            p *= Math.random();
+            p *= this.rng.next();
         } while (p > L);
         return min + (k - 1) % (max - min + 1);
     }
 
     _sampleExponential(min, max) {
         const lambda = 0.1;
-        const u = Math.random();
+        const u = this.rng.next();
         const expValue = -Math.log(1 - u) / lambda;
         return min + Math.floor(expValue) % (max - min + 1);
     }
@@ -630,7 +603,7 @@ class DistributionManager {
         const p = 0.3;
         let successes = 0;
         for (let i = 0; i < n; i++) {
-            if (Math.random() < p) successes++;
+            if (this.rng.next() < p) successes++;
         }
         return min + successes % n;
     }
@@ -638,7 +611,7 @@ class DistributionManager {
     _sampleGeometric(min, max) {
         const p = 0.2;
         let trials = 1;
-        while (Math.random() > p && trials < (max - min + 1) * 2) {
+        while (this.rng.next() > p && trials < (max - min + 1) * 2) {
             trials++;
         }
         return min + (trials - 1) % (max - min + 1);
@@ -646,7 +619,7 @@ class DistributionManager {
 
     _samplePowerLaw(min, max) {
         const alpha = 2.5;
-        const u = Math.random();
+        const u = this.rng.next();
         const x = Math.pow(1 - u, -1 / (alpha - 1));
         return min + Math.floor(x) % (max - min + 1);
     }
@@ -656,11 +629,11 @@ class DistributionManager {
         const mean1 = min + range * 0.3;
         const mean2 = min + range * 0.7;
         const stdDev = range * 0.1;
-        const mean = Math.random() < 0.5 ? mean1 : mean2;
-        
+        const mean = this.rng.next() < 0.5 ? mean1 : mean2;
+
         let u = 0, v = 0;
-        while (u === 0) u = Math.random();
-        while (v === 0) v = Math.random();
+        while (u === 0) u = this.rng.next();
+        while (v === 0) v = this.rng.next();
         const z = Math.sqrt(-2.0 * Math.log(u)) * Math.cos(2.0 * Math.PI * v);
         const result = Math.round(mean + z * stdDev);
         return Math.max(min, Math.min(max, result));
@@ -699,27 +672,28 @@ class FlickerService {
 
     start() {
         if (this.repo.isFlickering()) return;
-        
+
         this.repo.setFlickering(true);
         const btn = document.getElementById('flickerBtn');
         if (btn) btn.innerHTML = '⏸️ 暂停闪烁';
 
         const tick = () => {
             if (!this.repo.isFlickering()) return;
-            
+
             const result = this.randomGen.generate(
                 this.repo.getMinStudent(),
                 this.repo.getMaxStudent()
             );
-            
+
             this.renderer.setHTML(CONFIG.SELECTORS.FLICKER_RESULT, 
                 `✨ 闪烁中：<span class="blink">${result}</span>`
             );
-            
+
             const baseSpeed = this.repo.getFlickerSpeed();
-            const jitter = (Math.random() - 0.5) * 0.2 * baseSpeed;
+            // 每次抖动 ±30%，破坏节奏相位锁定
+            const jitter = (Math.random() - 0.5) * 0.6 * baseSpeed;
             const nextTick = Math.max(10, Math.floor(baseSpeed + jitter));
-            
+
             this.repo.setIntervalId(setTimeout(tick, nextTick));
         };
 
@@ -754,6 +728,7 @@ class OpenSettingsUseCase {
         this.renderer.setValue(CONFIG.SELECTORS.MAX_INPUT, this.repo.getMaxStudent());
         this.renderer.setValue(CONFIG.SELECTORS.SPEED_INPUT, this.repo.getFlickerSpeed());
         this.renderer.setValue(CONFIG.SELECTORS.JITTER_INPUT, this.repo.getJitterRange());
+        this.renderer.setChecked(CONFIG.SELECTORS.AUTO_CHECKBOX, this.repo.getAutoMode());
     }
 }
 
@@ -771,10 +746,12 @@ class SaveSettingsUseCase {
             const max = parseInt(this.renderer.getValue(CONFIG.SELECTORS.MAX_INPUT));
             const speed = parseInt(this.renderer.getValue(CONFIG.SELECTORS.SPEED_INPUT));
             const jitter = parseInt(this.renderer.getValue(CONFIG.SELECTORS.JITTER_INPUT));
+            const autoMode = this.renderer.getChecked(CONFIG.SELECTORS.AUTO_CHECKBOX);
 
             this.repo.updateRange(new StudentIdRange(min, max));
             this.repo.updateSpeed(new FlickerSpeed(speed));
             this.repo.updateJitter(jitter);
+            this.repo.updateAutoMode(autoMode);
             this.randomGen.setJitterRange(jitter);
 
             document.querySelectorAll('#currentTotal, #flickerTotal').forEach(el => {
@@ -793,22 +770,21 @@ class SaveSettingsUseCase {
 }
 
 // ============================================
-// 分布UI控制器（修复版 - 关键修改在这里）
+// 分布UI控制器
 // ============================================
 class DistributionUIController {
     constructor(manager, renderer, repository) {
         this.manager = manager;
         this.renderer = renderer;
-        this.repository = repository; // 添加 repository 引用
+        this.repository = repository;
     }
 
     initialize() {
-        // 关键修复：从 repository 读取保存的分布，并同步到 manager
         const savedDist = this.repository.getCurrentDistribution();
         if (savedDist) {
             this.manager.select(savedDist);
         }
-        
+
         this._renderMenu();
         this._bindEvents();
         this._updateFormulaDisplay();
@@ -843,7 +819,6 @@ class DistributionUIController {
 
     selectDistribution(key) {
         if (!this.manager.select(key)) return;
-
         this.repository.setDistribution(key);
 
         document.querySelectorAll('.dist-menu-item').forEach((item) => {
@@ -857,8 +832,7 @@ class DistributionUIController {
         const current = this.manager.getCurrent();
         this.renderer.setText(CONFIG.SELECTORS.CURRENT_DIST_NAME, current.name);
         this.renderer.setHTML(CONFIG.SELECTORS.FORMULA_BOX, current.latex);
-        
-        // 重新渲染MathJax
+
         if (window.MathJax) {
             MathJax.typesetPromise([document.getElementById('formulaBox')]).catch(err => {
                 console.error('MathJax渲染失败:', err);
@@ -869,49 +843,49 @@ class DistributionUIController {
     openDetailModal() {
         const current = this.manager.getCurrent();
         const detail = current.detail;
-        
+
         this.renderer.setText(CONFIG.SELECTORS.DETAIL_TITLE, `📐 ${detail.title}`);
-        
+
         const paramsHtml = detail.parameters.map(p => `
             <li><strong>${p.name}</strong>：${p.desc}<br>
             <small style="color:#667eea">${p.constraint}</small></li>
         `).join('');
-        
+
         const propertiesHtml = detail.properties.map(p => `<li>${p}</li>`).join('');
         const applicationsHtml = detail.applications.map(a => `<li>${a}</li>`).join('');
-        
+
         this.renderer.setHTML(CONFIG.SELECTORS.DETAIL_BODY, `
             <div class="detail-section">
                 <h4>📖 定义</h4>
                 <p>${detail.description}</p>
             </div>
-            
+
             <div class="detail-section">
                 <h4>📊 数学表达</h4>
                 <div class="detail-formula">${current.latex}</div>
             </div>
-            
+
             <div class="detail-section">
                 <h4>⚙️ 参数说明</h4>
                 <ul>${paramsHtml}</ul>
             </div>
-            
+
             <div class="detail-section">
                 <h4>📈 统计特性</h4>
                 <ul>${propertiesHtml}</ul>
             </div>
-            
+
             <div class="detail-section">
                 <h4>💡 应用场景</h4>
                 <ul>${applicationsHtml}</ul>
             </div>
-            
+
             <div class="detail-section">
                 <h4>🔍 关键特性</h4>
                 <p>${detail.characteristics}</p>
             </div>
         `);
-        
+
         setTimeout(() => {
             if (window.MathJax) {
                 MathJax.typesetPromise([document.getElementById('detailBody')]).catch(err => {
@@ -919,7 +893,7 @@ class DistributionUIController {
                 });
             }
         }, 10);
-        
+
         this.renderer.showElement(CONFIG.SELECTORS.DIST_DETAIL_MASK);
         this.renderer.showElement(CONFIG.SELECTORS.DIST_DETAIL_MODAL);
     }
@@ -931,7 +905,7 @@ class DistributionUIController {
 }
 
 // ============================================
-// 应用控制器（修复初始化 - 关键修改在这里）
+// 应用控制器
 // ============================================
 class ApplicationController {
     constructor() {
@@ -945,13 +919,12 @@ class ApplicationController {
         this.randomGen = new JitteredRandomGenerator();
         this.randomGen.setJitterRange(this.repository.getJitterRange());
         this.distManager = new DistributionManager();
-        
-        // 关键修复：传递 repository 给 DistributionUIController
+
         this.distUI = new DistributionUIController(this.distManager, this.renderer, this.repository);
-        
+
         this.flickerService = new FlickerService(this.repository, this.renderer, this.randomGen);
         this.downloadService = new FileDownloadService(CONFIG.URLS.SOURCE_CODE);
-        
+
         this.openSettingsUC = new OpenSettingsUseCase(this.repository, this.renderer);
         this.saveSettingsUC = new SaveSettingsUseCase(
             this.repository,
@@ -959,6 +932,10 @@ class ApplicationController {
             this.flickerService,
             this.randomGen
         );
+
+        // Auto-roll state
+        this._autoRolling = false;
+        this._autoRollFrameId = null;
     }
 
     _bindEvents() {
@@ -970,13 +947,9 @@ class ApplicationController {
     }
 
     _init() {
-        // 初始化分布UI（会从repository读取当前分布）
         this.distUI.initialize();
-        
-        // 显示默认界面
         this.renderer.showInterface('default');
-        
-        // 更新人数显示
+
         const text = `${this.repository.getMinStudent()} - ${this.repository.getMaxStudent()}`;
         document.querySelectorAll('#currentTotal, #flickerTotal').forEach(el => {
             el.textContent = text;
@@ -1001,17 +974,17 @@ class ApplicationController {
     }
 
     openSettings() { this.openSettingsUC.execute(); }
-    
+
     closeSettings() {
         this.renderer.hideElement(CONFIG.SELECTORS.MASK_LAYER);
         this.renderer.hideElement(CONFIG.SELECTORS.SETTINGS_MODAL);
     }
-    
+
     saveSettings() {
         const result = this.saveSettingsUC.execute();
         result.success ? this.closeSettings() : alert(result.error);
     }
-    
+
     async downloadSourceCode() {
         try {
             await this.downloadService.download('DrawingStudentsID-source.zip');
@@ -1019,8 +992,13 @@ class ApplicationController {
             alert('下载失败: ' + error.message);
         }
     }
-    
+
     handleDefaultDraw() {
+        if (this.repository.getAutoMode()) {
+            this._startAutoRoll();
+            return;
+        }
+
         const result = this.randomGen.generate(
             this.repository.getMinStudent(),
             this.repository.getMaxStudent()
@@ -1029,13 +1007,74 @@ class ApplicationController {
             `🎉 抽中学号：<span class="highlight">${result}</span>`
         );
     }
-    
+
     handleFlickerDraw() {
         this.flickerService.toggle();
     }
-    
+
+    // ============================================
+    // 平滑减速自动抽取（正弦缓出）
+    // ============================================
+    _startAutoRoll() {
+        if (this._autoRolling) return;
+        this._autoRolling = true;
+
+        const min = this.repository.getMinStudent();
+        const max = this.repository.getMaxStudent();
+        const duration = 5000;
+        const startTime = performance.now();
+
+        this._cancelAutoRoll();
+
+        const defaultBtn = this.renderer._getElement(CONFIG.SELECTORS.DEFAULT_DRAW_BUTTON);
+        if (defaultBtn) defaultBtn.disabled = true;
+
+        let acc = 0;
+        let lastTime = startTime;
+
+        const frame = (now) => {
+            const elapsed = now - startTime;
+            const t = Math.min(elapsed / duration, 1);
+
+            // 正弦缓出：delay 从 1ms 平滑到 1000ms
+            const targetDelay = 1 + 999 * Math.sin((Math.PI / 2) * t);
+
+            acc += now - lastTime;
+            lastTime = now;
+
+            if (acc >= targetDelay || t >= 1) {
+                const value = this.randomGen.generate(min, max);
+
+                if (t >= 1) {
+                    this.renderer.setHTML(CONFIG.SELECTORS.DEFAULT_RESULT, 
+                        `🎉 抽中学号：<span class="highlight">${value}</span>`);
+                    this._autoRolling = false;
+                    if (defaultBtn) defaultBtn.disabled = false;
+                    return;
+                }
+
+                this.renderer.setHTML(CONFIG.SELECTORS.DEFAULT_RESULT, 
+                    `✨ 抽取中：<span class="blink">${value}</span>`);
+                acc = 0;
+            }
+
+            this._autoRollFrameId = requestAnimationFrame(frame);
+        };
+
+        this._autoRollFrameId = requestAnimationFrame(frame);
+    }
+
+    _cancelAutoRoll() {
+        if (this._autoRollFrameId) {
+            cancelAnimationFrame(this._autoRollFrameId);
+            this._autoRollFrameId = null;
+        }
+        this._autoRolling = false;
+        const defaultBtn = this.renderer._getElement(CONFIG.SELECTORS.DEFAULT_DRAW_BUTTON);
+        if (defaultBtn) defaultBtn.disabled = false;
+    }
+
     handleDistributionDraw() {
-        // 使用 distManager 进行采样（它会使用自己的 currentKey）
         const result = this.distManager.sample(
             this.repository.getMinStudent(),
             this.repository.getMaxStudent()
@@ -1069,6 +1108,33 @@ window.handleFlickerDraw = () => app.handleFlickerDraw();
 window.handleDistributionDraw = () => app.handleDistributionDraw();
 window.openDistDetail = () => app.openDistDetail();
 window.closeDistDetail = () => app.closeDistDetail();
+
+// ============================================
+// 公平性验证（控制台调用）
+// ============================================
+window.runDistributionTest = function(samples = 10000) {
+    const min = app.repository.getMinStudent();
+    const max = app.repository.getMaxStudent();
+    const hist = {};
+
+    for (let i = 0; i < samples; i++) {
+        const v = app.randomGen.generate(min, max);
+        hist[v] = (hist[v] || 0) + 1;
+    }
+
+    const expected = samples / (max - min + 1);
+    let chiSquare = 0;
+
+    for (let v = min; v <= max; v++) {
+        const obs = hist[v] || 0;
+        chiSquare += Math.pow(obs - expected, 2) / expected;
+    }
+
+    console.table(hist);
+    console.log(`样本数: ${samples}, 期望值: ${expected.toFixed(1)}, 卡方值: ${chiSquare.toFixed(2)}`);
+    console.log('卡方值 < 100 表示分布较均匀，> 200 可能有偏');
+    return { histogram: hist, chiSquare, expected };
+};
 
 window.appState = {
     get minStudent() { return app.repository?.getMinStudent() || CONFIG.DEFAULTS.MIN_STUDENT; },

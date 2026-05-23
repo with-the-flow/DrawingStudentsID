@@ -33,7 +33,7 @@
       <span>当前班级人数：</span>
       <span id="currentTotal">1 - 52</span>
     </div>
-    <button class="draw-btn" onclick="handleDefaultDraw()">立即抽取</button>
+    <button id="defaultDrawBtn" class="draw-btn" onclick="handleDefaultDraw()">立即抽取</button>
     <div id="DefaultResult" class="result-box"></div>
   </div>
 
@@ -132,10 +132,16 @@
         <small>建议5-10，0表示关闭</small>
       </label>
 
+      <div class="input-row">
+        <label for="autoMode">自动化模式</label>
+        <input type="checkbox" id="autoMode" checked />
+        <small style="margin-left:8px;color:#666">开启时在默认模式下点击“立即抽取”会自动滚动并减速到最终结果</small>
+      </div>
+
       <div class="download-section">
         <button class="download-btn" onclick="downloadSourceCode()">
           <span>📥 下载源代码</span>
-          <div class="hint">包含HTML/CSS/JS文件</div>
+          <div class="hint">包含HTML/CS5S/JS文件</div>
           <div class="hint">小tips:https://github.com/with-the-flow/DrawingStudentsID 也可下载</div>
         </button>
       </div>
