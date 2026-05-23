@@ -1,6 +1,6 @@
 /* ==================== DrawStudentID.css ==================== */
 
-/* 基础样式 */
+/* Base */
 * {
     margin: 0;
     padding: 0;
@@ -14,7 +14,7 @@ body {
     padding: 20px;
 }
 
-/* 模式选择器 */
+/* Mode Selector */
 .mode-selector {
     position: fixed;
     top: 20px;
@@ -35,7 +35,7 @@ body {
     box-shadow: 0 5px 15px rgba(0,0,0,0.2);
 }
 
-/* 界面容器 */
+/* Interface Container */
 .interface {
     max-width: 900px;
     margin: 80px auto;
@@ -54,7 +54,7 @@ body {
     font-size: 2.5em;
 }
 
-/* 信息展示框 */
+/* Info Box */
 .info-box {
     margin: 20px 0;
     font-size: 18px;
@@ -65,7 +65,7 @@ body {
     border-radius: 10px;
 }
 
-/* 抽号按钮 */
+/* Draw Button */
 .draw-btn {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
@@ -85,7 +85,7 @@ body {
     box-shadow: 0 8px 25px rgba(102,126,234,0.6);
 }
 
-/* 结果显示框 */
+/* Result Box */
 .result-box {
     margin-top: 30px;
     padding: 25px;
@@ -97,7 +97,7 @@ body {
     min-height: 60px;
 }
 
-/* 闪烁动画 */
+/* Blink Animation - Active only during rolling */
 @keyframes blink {
     0%, 50% { opacity: 1; }
     51%, 100% { opacity: 0.3; }
@@ -109,14 +109,20 @@ body {
     font-weight: bold;
 }
 
+/* Static Result - No animation */
+.result-static {
+    color: #e74c3c;
+    font-weight: bold;
+    font-size: 1.2em;
+}
+
 .highlight {
     color: #e74c3c;
     font-weight: bold;
     font-size: 1.2em;
 }
 
-/* ==================== 概率分布界面 ==================== */
-
+/* Distribution Interface */
 .distribution-interface {
     max-width: 1000px;
     padding: 30px;
@@ -129,7 +135,7 @@ body {
     margin-top: 20px;
 }
 
-/* 左侧菜单 */
+/* Sidebar */
 .dist-sidebar {
     background: #f8f9fa;
     padding: 20px;
@@ -184,7 +190,7 @@ body {
     font-weight: 500;
 }
 
-/* 右侧公式显示区 */
+/* Main Area */
 .dist-main {
     display: flex;
     flex-direction: column;
@@ -245,7 +251,7 @@ body {
     text-align: center;
 }
 
-/* 分布详情弹窗特殊样式 */
+/* Detail Modal */
 .dist-detail-modal {
     width: 600px;
     max-width: 90vw;
@@ -298,7 +304,7 @@ body {
     margin: 15px 0;
 }
 
-/* 响应式 */
+/* Responsive */
 @media (max-width: 768px) {
     .distribution-layout {
         grid-template-columns: 1fr;
